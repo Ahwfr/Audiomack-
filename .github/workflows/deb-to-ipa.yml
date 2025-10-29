@@ -1,0 +1,44 @@
+name: deb → ipa
+
+on:
+  workflow_dispatch:
+    inputs:
+      deb_path:
+        description: 'Path to deb in repo'
+        required: true
+        default: 'com.x204.audiomack_0.0.1-1+debug_iphoneos-arm.deb'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binutils
+
+      - name: Extract deb and package ipa
+        run: |
+          set -e
+          mkdir extracted out
+          ar x "${{ github.event.inputs.deb_path }}"
+          if [ -f data.tar.gz ]; then tar -xzf data.tar.gz -C extracted; fi
+          if [ -f data.tar.xz ]; then tar -xJf data.tar.xz -C extracted; fi
+          if [ -f data.tar.bz2 ]; then tar -xjf data.tar.bz2 -C extracted; fi
+          if [ -f data.tar ]; then tar -xf data.tar -C extracted; fi
+          APP_PATH=$(find extracted -type d -name "*.app" | head -n 1 || true)
+          if [ -z "$APP_PATH" ]; then echo "No .app found in deb"; exit 1; fi
+          mkdir Payload
+          cp -a "$APP_PATH" Payload/
+          ZIPNAME=$(basename "$APP_PATH" .app).ipa
+          zip -r "out/$ZIPNAME" Payload
+          ls -lh out
+
+      - name: Upload ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipa
+          path: out/*.ipa
